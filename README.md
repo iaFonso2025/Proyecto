@@ -41,7 +41,7 @@ Este proyecto implementa un sistema de apertura de puerta basado en RFID, sensor
 
 1. **Clonar el repositorio**:
    ```bash
-   git clone https://github.com/tuusuario/puerta-rfid.git
+   git clone  https://github.com/iaFonso2025/Proyecto.git
    cd puerta-rfid
    ```
 2. **Abrir el código en Arduino IDE**.
