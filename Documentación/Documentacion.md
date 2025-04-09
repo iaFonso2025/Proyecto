@@ -176,7 +176,7 @@ void setup() {
 6. `servo.write(0);`:
     - Mueve el servomotor a la posición de puerta cerrada.
 
-## Loop – Lógica principal
+### Loop - Lógica principal
 
 Se ejecuta **continuamente** en un bucle infinito. Es donde se coloca la lógica del programa: la lectura de sensores, el control del RFID, el botón de cierre forzado, y el movimiento del servomotor.
 
