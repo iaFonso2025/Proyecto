@@ -17,7 +17,7 @@ bool puertaAbierta=false;
 unsigned long tiempoInicio=0;
 
 // UID de la tarjeta autorizada (modifícalo con tu tarjeta)
-byte tarjetaAutorizada[] = {0x12, 0x34, 0x56, 0x78};
+byte tarjetaAutorizada[] = {0x93, 0xD0, 0x2C, 0x16};
 
 void setup() {
     Serial.begin(9600);
@@ -34,16 +34,20 @@ void loop() {
     if (tarjetaValida()) abrirPuerta();
 
     if (puertaAbierta) {
-        if (obstaculoDetectado()) tiempoInicio = millis();
-
+        // ✅ Evaluamos primero si se quiere forzar el cierre
         if (botonForzado()) {
             cerrarPuerta();
             return;
         }
 
+        // ⬇️ Solo si no hay cierre forzado, comprobamos el obstáculo
+        if (obstaculoDetectado()) {
+            tiempoInicio = millis(); // reiniciar el contador si hay algo delante
+        }
+
         if (millis() - tiempoInicio >= TIEMPO_ABIERTO) {
             if (!obstaculoDetectado()) cerrarPuerta();
-            else tiempoInicio = millis();
+            else tiempoInicio = millis(); // sigue detectando algo
         }
     }
 }
@@ -103,16 +107,19 @@ bool botonForzado() {
 
     if (digitalRead(BOTON_PIN) == LOW) {
         if (tiempoPresionado == 0) {
-            tiempoPresionado = millis(); // Empieza a contar el tiempo
+            tiempoPresionado = millis();
+            Serial.println("Botón presionado...");
         }
-        if (millis() - tiempoPresionado >= 2000) { // Si se mantiene 2 seg
+        if (millis() - tiempoPresionado >= 2000) {
             Serial.println("Cierre forzado activado");
             return true;
         }
     } else {
-        tiempoPresionado = 0; // Reiniciar contador cuando se suelta
+        if (tiempoPresionado != 0) Serial.println("Botón soltado antes de los 2 segundos");
+        tiempoPresionado = 0;
     }
 
     return false;
 }
+
   
