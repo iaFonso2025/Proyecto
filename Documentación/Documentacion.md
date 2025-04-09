@@ -31,6 +31,16 @@ El objetivo de este proyecto es la automatización de una puerta de garaje, se a
 - **Botón Físico**: Este botón permite realizar un cierre forzado de la puerta. Si se mantiene presionado durante 2 segundos, el sistema cierra la puerta ignorando cualquier obstáculo en el camino, garantizando el cierre aunque haya un objeto detectado.
 ---
 
+## Aclaración sobre las Resistencias Pull-up
+En este proyecto, se hace uso de resistencias **pull-up** internas en los pines de entrada del microcontrolador. Una resistencia pull-up es una resistencia que asegura que el pin de entrada se mantenga en un estado alto **(HIGH)** por defecto, a menos que se active un componente conectado, como un botón o un sensor. Esto es útil para evitar lecturas erráticas o [flotantes](https://www.programmingelectronics.com/floating-pins-pull-up-resistors-and-arduino/#:~:text=Floating%20Pins%20%E2%80%93%20What%20the%20Serial,and%20serial%20communication%20is%20initiated.) en los pines de entrada cuando no están conectados a una señal activa.
+
+La resistencia pull-up se activa en el código utilizando el comando `INPUT_PULLUP`, lo que permite que el pin se mantenga en **HIGH** a menos que se conecte a tierra **(LOW)** al presionar un botón, por ejemplo. Esta configuración es común en proyectos que requieren la lectura de sensores o botones.
+
+**Ejemplo de cómo funciona:**
+  1. **Sin resistencia pull-up:** Si el pin no está conectado a ninguna fuente de voltaje, puede *"flotar"*, lo que provoca lecturas inconsistentes.
+
+  2. **Con resistencia pull-up:** El pin se mantiene en HIGH por defecto hasta que se conecte a tierra (LOW) cuando se presiona un botón, por ejemplo.
+
 ## Componentes Utilizados y Explicación Técnica
 
 | Componente                 | Descripción                                                   |
@@ -145,7 +155,7 @@ void setup() {
   servo.attach(SERVO_PIN);
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
-  pinMode(BOTON_PIN, INPUT_PULLUP);
+  pinMode(BOTON_PIN, INPUT_PULLUP); //Resistenacias PULLUP internas
   servo.write(0);  // Puerta cerrada al iniciar
 }
 ```
@@ -160,36 +170,36 @@ void setup() {
 4. `servo.attach(SERVO_PIN);`:
     - Conecta el servomotor al pin especificado para poder controlarlo.
 5. `Configuración de pines:`:
-    - `pinMode(TRIG_PIN, OUTPUT);` → El pin TRIG del sensor ultrasónico se usa para enviar un pulso.
-    - `pinMode(ECHO_PIN, INPUT);` → El pin ECHO recibe el eco del sensor.
-    -`pinMode(BOTON_PIN, INPUT_PULLUP);` → Se configura el botón con resistencia pull-up interna, es decir, estará en `HIGH` hasta que se pulse.
+    - `pinMode(TRIG_PIN, OUTPUT);` El pin TRIG del sensor ultrasónico se usa para enviar un pulso.
+    - `pinMode(ECHO_PIN, INPUT);` El pin ECHO recibe el eco del sensor.
+    -`pinMode(BOTON_PIN, INPUT_PULLUP);` Se configura el botón con resistencia pull-up interna, es decir, estará en `HIGH` hasta que se pulse.
 6. `servo.write(0);`:
     - Mueve el servomotor a la posición de puerta cerrada.
 
-### Loop - Lógica principal
+## Loop – Lógica principal
 
-Se ejecuta **continuamente** en un bucle infinito. Es donde se coloca la lógica del programa, las lecturas de sensores, y las acciones a realizar.
+Se ejecuta **continuamente** en un bucle infinito. Es donde se coloca la lógica del programa: la lectura de sensores, el control del RFID, el botón de cierre forzado, y el movimiento del servomotor.
 
-``` Arduino
+```cpp
 void loop() {
   if (tarjetaValida()) abrirPuerta();
 
   if (puertaAbierta) {
-    if (obstaculoDetectado()) tiempoInicio = millis();
-
     if (botonForzado()) {
         cerrarPuerta();
         return;
     }
 
+    if (obstaculoDetectado()) tiempoInicio = millis();
+
     if (millis() - tiempoInicio >= TIEMPO_ABIERTO) {
         if (!obstaculoDetectado()) cerrarPuerta();
-        else tiempoInicio = millis();
+        else tiempoInicio = millis(); // Sigue detectando algo, reinicia el contador
     }
   }
 }
-
 ```
+
 ##### Explicación del código
 
 1. **Comprueba si hay una tarjeta RFID válida:**
@@ -204,19 +214,22 @@ if (tarjetaValida()) abrirPuerta();
     if (puertaAbierta) {
     ```
     - Si la variable `puertaAbierta` es `true`, entonces:
-        - **Verifica si hay obstáculos con el sensor ultrasónico**
+        - **Verifica si el botón de cierre forzado está presionado**
         ``` Arduino
-        if (obstaculoDetectado()) tiempoInicio = millis();
+        if (botonForzado()) {
+        cerrarPuerta();
+        return;
+        }
         ```
-        - Si detecta un objeto, reinicia el temporizador `(tiempoInicio = millis();)`.
-    - **Verifica si el botón de cierre forzado está presionado**
+       - Si el botón se mantiene pulsado **más de 2 segundos**, cierra la puerta inmediatamente. 
+       - El `return` evita que se sigan evaluando más condiciones ese ciclo del bucle.
+    - **Comprueba si hay obstáculos delante de la puerta**
     ```Arduino
-    if (botonForzado()) {
-     cerrarPuerta();
-    return;
-    }
+    if (obstaculoDetectado()) tiempoInicio = millis();
     ```
-    - Si el botón se mantiene pulsado **más de 2 segundos**, cierra la puerta inmediatamente. 
+  - Si detecta un objeto, reinicia el temporizador `(tiempoInicio = millis();)`.
+  - Esto evita que la puerta se cierre si aún hay alguien o algo delante.
+
     
 - **Verifica si han pasado 10 segundos y no hay obstáculos**
 ```Arduino
@@ -237,7 +250,7 @@ bool tarjetaValida() {
     if (rfid.PICC_IsNewCardPresent() && rfid.PICC_ReadCardSerial()) {
         Serial.print("UID detectado: ");
         for (byte i = 0; i < rfid.uid.size; i++) {
-            Serial.print(rfid.uid.uidByte[i], HEX);
+            Serial.print(rfid.uid.uidByte[i], HEX); //Muestra el UID del rfid detectado
             Serial.print(" ");
         }
         Serial.println();
@@ -263,6 +276,8 @@ bool tarjetaValida() {
   - Si la tarjeta es válida, devuelve `true`.
 * `return false;`
   - Si no se detecta una tarjeta o no es legible, devuelve `false`.
+* `Serial.println()`
+  - Mensajes por consola que imprime el código del `rfid` que detecte, en caso de ser válida, muestra un mensaje, en caso que no, muestra otro
 
 
 
@@ -286,7 +301,7 @@ void abrirPuerta() {
 ### **Método `cerrarPuerta()`**
 ```Arduino
 void cerrarPuerta() {
-    servo.write(0);  
+    servo.write(0); //Mueve el servomotor 
     puertaAbierta = false;
     Serial.println("Puerta cerrada");
 }
@@ -309,7 +324,7 @@ bool obstaculoDetectado() {
     digitalWrite(TRIG_PIN, LOW);
 
     long duracion = pulseIn(ECHO_PIN, HIGH);
-    int distancia = duracion * 0.034 / 2;
+    int distancia = duracion * 0.034 / 2; //Uso de la formula
 
     Serial.print("Distancia: ");
     Serial.print(distancia);
@@ -339,7 +354,8 @@ bool obstaculoDetectado() {
   - Devuelve `true` si se detecta un obstáculo.
 * `return false;`
   - Si no se detecta un obstáculo, devuelve `false`.
-
+* `Depuración`
+  - Mensajes por consola para no perder el hilo del flujo con mensajes descriptivos
 
 ### **Método `botonForzado()`**
 ```Arduino
@@ -348,31 +364,38 @@ bool botonForzado() {
 
     if (digitalRead(BOTON_PIN) == LOW) {
         if (tiempoPresionado == 0) {
-            tiempoPresionado = millis(); // Empieza a contar el tiempo
+            tiempoPresionado = millis();
+            Serial.println("Botón presionado...");
         }
-        if (millis() - tiempoPresionado >= 2000) { // Si se mantiene 2 seg
+        if (millis() - tiempoPresionado >= 2000) {
             Serial.println("Cierre forzado activado");
             return true;
         }
     } else {
-        tiempoPresionado = 0; // Reiniciar contador cuando se suelta
+        if (tiempoPresionado != 0) Serial.println("Botón soltado antes de los 2 segundos");
+        tiempoPresionado = 0;
     }
 
     return false;
 }
 ```
-* `static unsigned long tiempoUltimoBoton = 0;`
-  - Se declara una **variable estática** que recuerda el tiempo de la última vez que se presionó el botón.
+* `static unsigned long tiempoPresionado = 0;`
+  - Se declara una **variable estática** que recuerda el **tiempo** cuando se presiona el botón por primera vez.
 * `if (digitalRead(BOTON_PIN) == LOW)`
   - Verifica si el **botón** está presionado (en este caso, el botón está configurado para estar en `LOW` cuando se presiona).
-* `if (millis() - tiempoUltimoBoton >= 2000)`
-  - Si han pasado **más de 2 segundos** desde la última vez que se presionó el botón, se ejecuta el código siguiente.
-* `tiempoUltimoBoton = millis();`
+* `if (millis() - tiempoPresionado >= 2000)`
+  - Si han pasado **más de 2 segundos** desde que se presionó el botón, se ejecuta el código siguiente.
+* `tiempoPresionado = millis();`
   - Actualiza el **tiempo** de la última vez que se presionó el botón.
+* `Serial.println("Botón presionado...");`
+  - Imprime en la consola el mensaje **"Botón presionado..."** cuando el botón es presionado.
 * `return true;`
-  - Si el botón se ha presionado durante **2 segundos**, devuelve `true`.
+  - Si el botón ha sido presionado durante **2 segundos**, devuelve `true` para indicar que se ha activado el "cierre forzado" y se imprime el mensaje **"Cierre forzado activado"**.
+* `Serial.println("Botón soltado antes de los 2 segundos");`
+  - Si el botón se suelta antes de los **2 segundos**, se imprime el mensaje **"Botón soltado antes de los 2 segundos"** en la consola.
 * `return false;`
-  - Si no se ha presionado durante **2 segundos**, devuelve `false`.
+  - Si el botón no se ha presionado durante **2 segundos**, devuelve `false` para indicar que no se ha activado el cierre forzado.
+
 
 ---
 # Webgrafía
